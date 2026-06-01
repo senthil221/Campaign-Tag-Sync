@@ -61,7 +61,7 @@ export async function removeSendersFromCampaign(campaignId: number, emailAccount
 
 export async function fetchAllEmailAccountsWithTags(): Promise<TagGroup[]> {
   const jwt = getJwt();
-  const limit = 500;
+  const limit = 100;
   let offset = 0;
   let allAccounts: Array<{
     id: number;
