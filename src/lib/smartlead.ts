@@ -18,10 +18,10 @@ function getJwt(): string {
 
 
 function extractCampaignTags(c: Record<string, unknown>): string[] {
-  // Smartlead returns tags as a flat array: { id, name } objects or plain strings
-  const raw = (c.tags as Array<{ id?: number; name?: string } | string> | undefined) ?? [];
+  // Smartlead returns tags as: [{ tag_id, tag_name, tag_color }]
+  const raw = (c.tags as Array<{ tag_name?: string; name?: string } | string> | undefined) ?? [];
   return raw
-    .map(t => (typeof t === 'string' ? t : t?.name))
+    .map(t => (typeof t === 'string' ? t : (t?.tag_name ?? t?.name)))
     .filter((n): n is string => !!n);
 }
 
