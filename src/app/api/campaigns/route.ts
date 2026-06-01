@@ -1,7 +1,17 @@
 import { NextResponse } from 'next/server';
-import { fetchAllCampaigns, fetchCampaignEmailAccounts } from '@/lib/smartlead';
+import { fetchAllCampaigns, fetchCampaignEmailAccounts, fetchRawCampaignSample } from '@/lib/smartlead';
 
-export async function GET() {
+export async function GET(req: import('next/server').NextRequest) {
+  // Debug endpoint: /api/campaigns?debug=1 returns raw first campaign object
+  if (req.nextUrl.searchParams.get('debug') === '1') {
+    try {
+      const sample = await fetchRawCampaignSample();
+      return NextResponse.json({ sample });
+    } catch (err) {
+      return NextResponse.json({ error: err instanceof Error ? err.message : 'error' }, { status: 500 });
+    }
+  }
+
   try {
     const campaigns = await fetchAllCampaigns();
     // Fetch sender counts with limited concurrency

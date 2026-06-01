@@ -16,25 +16,49 @@ function getJwt(): string {
   return jwt.startsWith('Bearer ') ? jwt : `Bearer ${jwt}`;
 }
 
+// Returns the raw first campaign object so we can inspect the real API shape
+export async function fetchRawCampaignSample(): Promise<unknown> {
+  const apiKey = getApiKey();
+  const url = `${API_BASE}/campaigns?api_key=${apiKey}&include_tags=true&limit=1&offset=0`;
+  const res = await fetch(url, { cache: 'no-store' });
+  if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+  const json = await res.json();
+  const raw = Array.isArray(json) ? json : json?.data ?? [];
+  return raw[0] ?? json;
+}
+
+function extractCampaignTags(c: Record<string, unknown>): string[] {
+  // Try all known field name patterns Smartlead may use
+  const mappings =
+    (c.campaign_tag_mappings as Array<{ tag?: { name?: string } }> | undefined) ??
+    (c.tag_mappings        as Array<{ tag?: { name?: string } }> | undefined) ??
+    [];
+
+  const fromMappings = mappings
+    .map(m => m?.tag?.name)
+    .filter((n): n is string => !!n);
+
+  // Some responses put tags as a flat array directly
+  const direct = (c.tags as Array<{ name?: string } | string> | undefined) ?? [];
+  const fromDirect = direct
+    .map(t => (typeof t === 'string' ? t : t?.name))
+    .filter((n): n is string => !!n);
+
+  return [...new Set([...fromMappings, ...fromDirect])];
+}
+
 export async function fetchAllCampaigns(): Promise<Campaign[]> {
   const apiKey = getApiKey();
   const url = `${API_BASE}/campaigns?api_key=${apiKey}&include_tags=true`;
   const res = await fetch(url, { cache: 'no-store' });
   if (!res.ok) throw new Error(`Failed to fetch campaigns: ${res.status} ${res.statusText}`);
   const json = await res.json();
-  const raw: Array<{
-    id: number;
-    name: string;
-    status: string;
-    campaign_tag_mappings?: Array<{ tag?: { name?: string } }>;
-  }> = Array.isArray(json) ? json : json?.data ?? [];
+  const raw: Array<Record<string, unknown>> = Array.isArray(json) ? json : json?.data ?? [];
   return raw.map(c => ({
-    id: c.id,
-    name: c.name,
-    status: c.status ?? 'UNKNOWN',
-    tags: (c.campaign_tag_mappings ?? [])
-      .map(m => m.tag?.name)
-      .filter((n): n is string => !!n),
+    id:     c.id     as number,
+    name:   c.name   as string,
+    status: (c.status as string) ?? 'UNKNOWN',
+    tags:   extractCampaignTags(c),
   }));
 }
 
