@@ -128,7 +128,7 @@ export default function Home() {
   const selectedCampaigns = campaigns.filter(c => selectedCampaignIds.has(c.id));
 
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
+    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       {/* Header */}
       <header style={{ borderBottom: '1px solid var(--border)', padding: '16px 28px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'var(--surface)' }}>
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 12 }}>
@@ -145,10 +145,10 @@ export default function Home() {
         </div>
       </header>
 
-      {/* Main content */}
-      <main style={{ flex: 1, padding: '20px 28px', display: 'flex', flexDirection: 'column', gap: 16, minHeight: 0 }}>
-        {/* Panels row */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, flex: 1, minHeight: 480, maxHeight: 'calc(100vh - 280px)' }}>
+      {/* Main content — fills remaining viewport height, nothing overflows */}
+      <main style={{ flex: 1, padding: '16px 24px 0', display: 'flex', flexDirection: 'column', gap: 12, minHeight: 0, overflow: 'hidden' }}>
+        {/* Panels row — takes all available space above sync panel */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, flex: 1, minHeight: 0, overflow: 'hidden' }}>
           <CampaignSelector
             campaigns={campaigns}
             selectedIds={selectedCampaignIds}
@@ -167,26 +167,24 @@ export default function Home() {
           />
         </div>
 
-        {/* Sync action panel */}
-        <SyncPanel
-          selectedCampaigns={selectedCampaigns}
-          selectedTag={selectedTag}
-          syncMode={syncMode}
-          onModeChange={setSyncMode}
-          onPreview={handlePreview}
-          previewLoading={previewLoading}
-        />
+        {/* Sync action panel — fixed height at bottom, never overlaps */}
+        <div style={{ flexShrink: 0 }}>
+          <SyncPanel
+            selectedCampaigns={selectedCampaigns}
+            selectedTag={selectedTag}
+            syncMode={syncMode}
+            onModeChange={setSyncMode}
+            onPreview={handlePreview}
+            previewLoading={previewLoading}
+          />
+        </div>
       </main>
 
       {/* Footer */}
-      <footer style={{ padding: '10px 28px', borderTop: '1px solid var(--border)', display: 'flex', gap: 20, alignItems: 'center' }}>
-        <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>
-          Click ↻ in each panel to load data from Smartlead
-        </span>
+      <footer style={{ flexShrink: 0, padding: '8px 24px', borderTop: '1px solid var(--border)', display: 'flex', gap: 20, alignItems: 'center' }}>
+        <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>Click ↻ in each panel to load data</span>
         <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>·</span>
-        <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>
-          Select campaigns + tag → Preview → Confirm to sync
-        </span>
+        <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>Select campaigns + tag → Preview → Confirm</span>
       </footer>
 
       {/* Preview Modal */}
