@@ -76,7 +76,10 @@ export async function fetchAllEmailAccountsWithTags(): Promise<TagGroup[]> {
       headers: { Authorization: jwt },
       cache: 'no-store',
     });
-    if (!res.ok) throw new Error(`Failed to fetch email accounts: ${res.status} ${res.statusText}`);
+    if (!res.ok) {
+      const body = await res.text().catch(() => '');
+      throw new Error(`Failed to fetch email accounts: ${res.status} ${res.statusText} — ${body}`);
+    }
     const json = await res.json();
     const accounts = json?.data?.email_accounts ?? json?.data ?? [];
     if (!accounts || accounts.length === 0) {
