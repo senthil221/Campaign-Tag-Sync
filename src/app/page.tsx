@@ -62,7 +62,16 @@ export default function Home() {
     });
   }, []);
 
-  const selectAllCampaigns = useCallback(() => setSelectedCampaignIds(new Set(campaigns.map(c => c.id))), [campaigns]);
+  const selectFilteredCampaigns = useCallback((ids: number[]) => {
+    setSelectedCampaignIds(prev => {
+      // If all filtered are already selected, deselect them; otherwise add them
+      const allSelected = ids.every(id => prev.has(id));
+      const next = new Set(prev);
+      if (allSelected) ids.forEach(id => next.delete(id));
+      else ids.forEach(id => next.add(id));
+      return next;
+    });
+  }, []);
   const clearCampaigns = useCallback(() => setSelectedCampaignIds(new Set()), []);
 
   const selectedTag = useMemo(() => tags.find(t => t.name === selectedTagName) ?? null, [tags, selectedTagName]);
@@ -176,7 +185,7 @@ export default function Home() {
             campaigns={campaigns}
             selectedIds={selectedCampaignIds}
             onToggle={toggleCampaign}
-            onSelectAll={selectAllCampaigns}
+            onSelectFiltered={selectFilteredCampaigns}
             onClearAll={clearCampaigns}
             loading={campaignsLoading}
             onRefresh={fetchCampaigns}

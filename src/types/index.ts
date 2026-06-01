@@ -3,6 +3,7 @@ export interface Campaign {
   name: string;
   status: string;
   sender_count?: number;
+  tags?: string[]; // campaign-level tags (from Smartlead campaign tag mappings)
 }
 
 export interface EmailAccount {
