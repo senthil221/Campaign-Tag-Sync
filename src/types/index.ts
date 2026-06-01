@@ -8,12 +8,30 @@ export interface Campaign {
 export interface EmailAccount {
   id: number;
   from_email: string;
+  is_smtp_success?: boolean | null;
+  is_imap_success?: boolean | null;
+}
+
+export type AccountHealth = 'active' | 'disconnected' | 'unknown';
+
+export function getAccountHealth(acc: EmailAccount): AccountHealth {
+  if (acc.is_smtp_success == null || acc.is_imap_success == null) return 'unknown';
+  if (acc.is_smtp_success === true && acc.is_imap_success === true) return 'active';
+  return 'disconnected';
+}
+
+export interface TagHealthSummary {
+  total: number;
+  active: number;
+  disconnected: number;
+  unknown: number;
 }
 
 export interface TagGroup {
   name: string;
   accounts: EmailAccount[];
   count: number;
+  health: TagHealthSummary;
 }
 
 export interface CampaignSyncPreview {
@@ -26,11 +44,7 @@ export interface CampaignSyncPreview {
   error?: string;
 }
 
-export interface SyncMode {
-  mode: 'replace' | 'add' | 'remove';
-}
-
-export type SyncStatus = 'idle' | 'loading' | 'success' | 'error';
+export type SyncMode = 'replace' | 'add' | 'remove';
 
 export interface SyncResult {
   campaign_id: number;

@@ -6,70 +6,66 @@ interface Props {
   selectedTag: TagGroup | null;
   syncMode: 'replace' | 'add' | 'remove';
   onModeChange: (mode: 'replace' | 'add' | 'remove') => void;
+  useOnlyActive: boolean;
+  onToggleActive: () => void;
   onPreview: () => void;
   previewLoading: boolean;
 }
 
-const MODES: { value: 'replace' | 'add' | 'remove'; label: string; desc: string; color: string }[] = [
-  { value: 'replace', label: 'Replace', desc: 'Set campaign senders to exactly this tag', color: 'var(--accent)' },
-  { value: 'add', label: 'Add Only', desc: 'Add tag accounts without removing others', color: 'var(--green)' },
-  { value: 'remove', label: 'Remove Only', desc: 'Remove tag accounts from campaigns', color: 'var(--red)' },
+const MODES: { value: 'replace' | 'add' | 'remove'; label: string; desc: string }[] = [
+  { value: 'replace', label: 'Replace',     desc: 'Set senders to exactly this tag' },
+  { value: 'add',     label: 'Add Only',    desc: 'Add accounts, keep existing ones' },
+  { value: 'remove',  label: 'Remove Only', desc: 'Remove tag accounts from campaigns' },
 ];
 
 export default function SyncPanel({
-  selectedCampaigns, selectedTag, syncMode, onModeChange, onPreview, previewLoading
+  selectedCampaigns, selectedTag, syncMode, onModeChange,
+  useOnlyActive, onToggleActive, onPreview, previewLoading,
 }: Props) {
   const ready = selectedCampaigns.length > 0 && selectedTag !== null;
+  const { health } = selectedTag ?? { health: null };
+  const willUse = health ? (useOnlyActive ? health.active : health.total) : 0;
+  const skipped = health && useOnlyActive ? health.disconnected : 0;
 
   return (
-    <div className="panel" style={{ padding: 20 }}>
-      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 24, flexWrap: 'wrap' }}>
+    <div className="panel" style={{ padding: 16 }}>
+      <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'flex-start' }}>
 
         {/* Selection summary */}
-        <div style={{ flex: 1, minWidth: 200 }}>
-          <div className="label" style={{ marginBottom: 8 }}>Selection</div>
-          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-            <div style={{ background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 3, padding: '8px 14px' }}>
-              <div className="label" style={{ fontSize: 9, marginBottom: 4 }}>Campaigns</div>
-              <div style={{ fontSize: 18, fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 700, color: selectedCampaigns.length > 0 ? 'var(--accent)' : 'var(--text-muted)' }}>
-                {selectedCampaigns.length}
-              </div>
-            </div>
-            <div style={{ background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 3, padding: '8px 14px' }}>
-              <div className="label" style={{ fontSize: 9, marginBottom: 4 }}>Tag</div>
-              <div style={{ fontSize: 13, color: selectedTag ? 'var(--green)' : 'var(--text-muted)', fontWeight: 600, maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {selectedTag ? selectedTag.name : '—'}
-              </div>
-              {selectedTag && (
-                <div style={{ fontSize: 10, color: 'var(--text-dim)', marginTop: 2 }}>{selectedTag.count} accounts</div>
-              )}
-            </div>
-          </div>
+        <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+          <StatCard label="Campaigns" value={selectedCampaigns.length} active={selectedCampaigns.length > 0} color="var(--accent)" />
+          <StatCard label="Tag" value={selectedTag?.name ?? '—'} active={!!selectedTag} color="var(--success)" isText />
+          {selectedTag && (
+            <StatCard label="Will use" value={willUse} active={willUse > 0} color={skipped > 0 ? 'var(--warning)' : 'var(--success)'} />
+          )}
         </div>
 
+        {/* Divider */}
+        <div style={{ width: 1, background: 'var(--border)', alignSelf: 'stretch', flexShrink: 0 }} />
+
         {/* Mode selector */}
-        <div style={{ flex: 2, minWidth: 300 }}>
-          <div className="label" style={{ marginBottom: 8 }}>Sync Mode</div>
-          <div style={{ display: 'flex', gap: 8 }}>
+        <div style={{ flex: 1, minWidth: 280 }}>
+          <div className="section-label" style={{ marginBottom: 8 }}>Sync Mode</div>
+          <div style={{ display: 'flex', gap: 6 }}>
             {MODES.map(m => (
               <button
                 key={m.value}
                 onClick={() => onModeChange(m.value)}
                 style={{
                   flex: 1,
-                  padding: '10px 12px',
-                  border: `1px solid ${syncMode === m.value ? m.color : 'var(--border)'}`,
-                  borderRadius: 3,
-                  background: syncMode === m.value ? `rgba(${m.color === 'var(--accent)' ? '0,229,255' : m.color === 'var(--green)' ? '0,255,136' : '255,68,102'}, 0.08)` : 'var(--surface-2)',
+                  padding: '9px 12px',
+                  border: `1px solid ${syncMode === m.value ? 'var(--accent)' : 'var(--border)'}`,
+                  borderRadius: 8,
+                  background: syncMode === m.value ? 'var(--accent-dim)' : 'var(--panel-2)',
                   cursor: 'pointer',
                   textAlign: 'left' as const,
                   transition: 'all 0.15s',
                 }}
               >
-                <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 700, fontSize: 13, color: syncMode === m.value ? m.color : 'var(--text)', letterSpacing: '0.05em', marginBottom: 3 }}>
+                <div style={{ fontSize: 13, fontWeight: 600, color: syncMode === m.value ? 'var(--accent)' : 'var(--text)', marginBottom: 2 }}>
                   {m.label}
                 </div>
-                <div style={{ fontSize: 10, color: 'var(--text-dim)', lineHeight: 1.4 }}>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.4 }}>
                   {m.desc}
                 </div>
               </button>
@@ -77,29 +73,80 @@ export default function SyncPanel({
           </div>
         </div>
 
-        {/* Action */}
-        <div style={{ display: 'flex', alignItems: 'flex-end', paddingBottom: 2 }}>
+        {/* Divider */}
+        <div style={{ width: 1, background: 'var(--border)', alignSelf: 'stretch', flexShrink: 0 }} />
+
+        {/* Active toggle + action */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, justifyContent: 'space-between' }}>
+          <div>
+            <div className="section-label" style={{ marginBottom: 8 }}>Filter</div>
+            <div
+              style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', userSelect: 'none' }}
+              onClick={onToggleActive}
+            >
+              <div className={`toggle${useOnlyActive ? ' on' : ''}`} />
+              <span style={{ fontSize: 13, color: 'var(--text-2)', fontWeight: 500 }}>
+                Use only active accounts
+              </span>
+            </div>
+            {selectedTag && (
+              <div style={{ marginTop: 6, fontSize: 11, color: 'var(--text-muted)' }}>
+                {useOnlyActive
+                  ? <><span style={{ color: 'var(--success)' }}>{willUse} active</span> will be used{skipped > 0 && <> · <span style={{ color: 'var(--danger)' }}>{skipped} skipped</span></>}</>
+                  : <span>{willUse} accounts included</span>
+                }
+              </div>
+            )}
+          </div>
+
           <button
             className="btn btn-primary"
             onClick={onPreview}
             disabled={!ready || previewLoading}
-            style={{ height: 44, fontSize: 13, paddingInline: 28 }}
+            style={{ width: '100%', justifyContent: 'center' }}
           >
-            {previewLoading ? (
-              <><span className="spinner" style={{ borderTopColor: '#000' }} /> Computing...</>
-            ) : (
-              <>Preview Sync →</>
-            )}
+            {previewLoading
+              ? <><span className="spinner" style={{ borderTopColor: '#fff' }} />Computing…</>
+              : 'Preview Sync'
+            }
           </button>
         </div>
       </div>
 
+      {/* Not-ready hint */}
       {!ready && (
-        <div style={{ marginTop: 14, fontSize: 11, color: 'var(--text-muted)', display: 'flex', gap: 16 }}>
-          {selectedCampaigns.length === 0 && <span>◦ Select at least one campaign</span>}
-          {!selectedTag && <span>◦ Select an email tag</span>}
+        <div style={{ marginTop: 12, display: 'flex', gap: 16, fontSize: 12, color: 'var(--text-faint)' }}>
+          {selectedCampaigns.length === 0 && <span>↑ Select at least one campaign</span>}
+          {!selectedTag && <span>↑ Select an email tag</span>}
         </div>
       )}
+    </div>
+  );
+}
+
+function StatCard({ label, value, active, color, isText = false }: {
+  label: string; value: string | number; active: boolean; color: string; isText?: boolean;
+}) {
+  return (
+    <div style={{
+      background: 'var(--panel-2)',
+      border: `1px solid ${active ? color : 'var(--border)'}`,
+      borderRadius: 8,
+      padding: '8px 14px',
+      minWidth: isText ? 90 : 64,
+      transition: 'border-color 0.2s',
+    }}>
+      <div className="section-label" style={{ fontSize: 10, marginBottom: 4 }}>{label}</div>
+      <div style={{
+        fontSize: isText ? 12 : 20,
+        fontWeight: 700,
+        color: active ? color : 'var(--text-faint)',
+        fontFamily: isText ? 'Inter' : 'JetBrains Mono, monospace',
+        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+        maxWidth: 120,
+      }}>
+        {value}
+      </div>
     </div>
   );
 }

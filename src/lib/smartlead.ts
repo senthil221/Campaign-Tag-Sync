@@ -1,3 +1,4 @@
+import { getAccountHealth } from '@/types';
 import type { Campaign, EmailAccount, TagGroup } from '@/types';
 
 const API_BASE = 'https://server.smartlead.ai/api/v1';
@@ -66,6 +67,8 @@ export async function fetchAllEmailAccountsWithTags(): Promise<TagGroup[]> {
   let allAccounts: Array<{
     id: number;
     from_email: string;
+    is_smtp_success?: boolean | null;
+    is_imap_success?: boolean | null;
     email_account_tag_mappings: Array<{ tag?: { name?: string } }>;
   }> = [];
   let more = true;
@@ -87,8 +90,7 @@ export async function fetchAllEmailAccountsWithTags(): Promise<TagGroup[]> {
     } else {
       allAccounts = allAccounts.concat(Array.isArray(accounts) ? accounts : [accounts]);
       offset += limit;
-      // Small delay to avoid rate limiting
-      await new Promise(r => setTimeout(r, 200));
+      await new Promise(r => setTimeout(r, 150));
     }
   }
 
@@ -100,12 +102,29 @@ export async function fetchAllEmailAccountsWithTags(): Promise<TagGroup[]> {
       const tName = m.tag?.name;
       if (tName) {
         if (!tagMap[tName]) tagMap[tName] = [];
-        tagMap[tName].push({ id: acc.id, from_email: acc.from_email ?? 'unknown' });
+        tagMap[tName].push({
+          id: acc.id,
+          from_email: acc.from_email ?? 'unknown',
+          is_smtp_success: acc.is_smtp_success ?? null,
+          is_imap_success: acc.is_imap_success ?? null,
+        });
       }
     }
   }
 
   return Object.keys(tagMap)
     .sort()
-    .map(name => ({ name, accounts: tagMap[name], count: tagMap[name].length }));
+    .map(name => {
+      const accounts = tagMap[name];
+      const health = accounts.reduce(
+        (acc, a) => {
+          const h = getAccountHealth(a);
+          acc[h]++;
+          acc.total++;
+          return acc;
+        },
+        { total: 0, active: 0, disconnected: 0, unknown: 0 }
+      );
+      return { name, accounts, count: accounts.length, health };
+    });
 }
