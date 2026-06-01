@@ -1,0 +1,108 @@
+import type { Campaign, EmailAccount, TagGroup } from '@/types';
+
+const API_BASE = 'https://server.smartlead.ai/api/v1';
+const INTERNAL_BASE = 'https://server.smartlead.ai/api';
+
+function getApiKey(): string {
+  const key = process.env.SMARTLEAD_API_KEY;
+  if (!key) throw new Error('SMARTLEAD_API_KEY is not set in environment variables');
+  return key;
+}
+
+function getJwt(): string {
+  const jwt = process.env.SMARTLEAD_JWT;
+  if (!jwt) throw new Error('SMARTLEAD_JWT is not set in environment variables');
+  return jwt.startsWith('Bearer ') ? jwt : `Bearer ${jwt}`;
+}
+
+export async function fetchAllCampaigns(): Promise<Campaign[]> {
+  const apiKey = getApiKey();
+  const url = `${API_BASE}/campaigns?api_key=${apiKey}&include_tags=true`;
+  const res = await fetch(url, { cache: 'no-store' });
+  if (!res.ok) throw new Error(`Failed to fetch campaigns: ${res.status} ${res.statusText}`);
+  const json = await res.json();
+  const raw: Array<{ id: number; name: string; status: string }> = Array.isArray(json) ? json : json?.data ?? [];
+  return raw.map(c => ({ id: c.id, name: c.name, status: c.status ?? 'UNKNOWN' }));
+}
+
+export async function fetchCampaignEmailAccounts(campaignId: number): Promise<EmailAccount[]> {
+  const apiKey = getApiKey();
+  const url = `${API_BASE}/campaigns/${campaignId}/email-accounts?api_key=${apiKey}&include_tags=true`;
+  const res = await fetch(url, { cache: 'no-store' });
+  if (!res.ok) throw new Error(`Failed to fetch senders for campaign ${campaignId}: ${res.status}`);
+  const json = await res.json();
+  const raw: Array<{ id: number; from_email: string }> = Array.isArray(json) ? json : json?.data ?? [];
+  return raw.map(a => ({ id: a.id, from_email: a.from_email }));
+}
+
+export async function addSendersToCampaign(campaignId: number, emailAccountIds: number[]): Promise<void> {
+  if (emailAccountIds.length === 0) return;
+  const apiKey = getApiKey();
+  const url = `${API_BASE}/campaigns/${campaignId}/email-accounts?api_key=${apiKey}`;
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email_account_ids: emailAccountIds }),
+  });
+  if (!res.ok) throw new Error(`Failed to add senders to campaign ${campaignId}: ${res.status}`);
+}
+
+export async function removeSendersFromCampaign(campaignId: number, emailAccountIds: number[]): Promise<void> {
+  if (emailAccountIds.length === 0) return;
+  const apiKey = getApiKey();
+  const url = `${API_BASE}/campaigns/${campaignId}/email-accounts?api_key=${apiKey}`;
+  const res = await fetch(url, {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email_account_ids: emailAccountIds }),
+  });
+  if (!res.ok) throw new Error(`Failed to remove senders from campaign ${campaignId}: ${res.status}`);
+}
+
+export async function fetchAllEmailAccountsWithTags(): Promise<TagGroup[]> {
+  const jwt = getJwt();
+  const limit = 500;
+  let offset = 0;
+  let allAccounts: Array<{
+    id: number;
+    from_email: string;
+    email_account_tag_mappings: Array<{ tag?: { name?: string } }>;
+  }> = [];
+  let more = true;
+
+  while (more) {
+    const url = `${INTERNAL_BASE}/email-account/get-total-email-accounts?offset=${offset}&limit=${limit}`;
+    const res = await fetch(url, {
+      headers: { Authorization: jwt },
+      cache: 'no-store',
+    });
+    if (!res.ok) throw new Error(`Failed to fetch email accounts: ${res.status} ${res.statusText}`);
+    const json = await res.json();
+    const accounts = json?.data?.email_accounts ?? json?.data ?? [];
+    if (!accounts || accounts.length === 0) {
+      more = false;
+    } else {
+      allAccounts = allAccounts.concat(Array.isArray(accounts) ? accounts : [accounts]);
+      offset += limit;
+      // Small delay to avoid rate limiting
+      await new Promise(r => setTimeout(r, 200));
+    }
+  }
+
+  // Group by tag name
+  const tagMap: Record<string, EmailAccount[]> = {};
+  for (const acc of allAccounts) {
+    const mappings = acc.email_account_tag_mappings ?? [];
+    for (const m of mappings) {
+      const tName = m.tag?.name;
+      if (tName) {
+        if (!tagMap[tName]) tagMap[tName] = [];
+        tagMap[tName].push({ id: acc.id, from_email: acc.from_email ?? 'unknown' });
+      }
+    }
+  }
+
+  return Object.keys(tagMap)
+    .sort()
+    .map(name => ({ name, accounts: tagMap[name], count: tagMap[name].length }));
+}
