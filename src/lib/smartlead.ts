@@ -76,16 +76,18 @@ export async function removeSendersFromCampaign(campaignId: number, emailAccount
 }
 
 export async function reallocateMailboxes(campaignId: number): Promise<unknown> {
+  const apiKey = getApiKey();
   const jwt = getJwt();
-  const url = `${INTERNAL_BASE}/email-campaigns/${campaignId}/reallocate-mailboxes`;
+  const url = `${INTERNAL_BASE}/email-campaigns/${campaignId}/reallocate-mailboxes?api_key=${apiKey}`;
   const res = await fetch(url, { headers: { Authorization: jwt }, cache: 'no-store' });
   if (!res.ok) throw new Error(`Campaign ${campaignId}: ${res.status} ${res.statusText}`);
   return res.json().catch(() => null);
 }
 
 export async function rescheduleFailedLeads(campaignId: number): Promise<unknown> {
+  const apiKey = getApiKey();
   const jwt = getJwt();
-  const url = `${INTERNAL_BASE}/email-campaigns/${campaignId}/reschedule-failed-leads`;
+  const url = `${INTERNAL_BASE}/email-campaigns/${campaignId}/reschedule-failed-leads?api_key=${apiKey}`;
   const res = await fetch(url, { headers: { Authorization: jwt }, cache: 'no-store' });
   if (!res.ok) throw new Error(`Campaign ${campaignId}: ${res.status} ${res.statusText}`);
   return res.json().catch(() => null);
