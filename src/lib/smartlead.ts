@@ -33,10 +33,11 @@ export async function fetchAllCampaigns(): Promise<Campaign[]> {
   const json = await res.json();
   const raw: Array<Record<string, unknown>> = Array.isArray(json) ? json : json?.data ?? [];
   return raw.map(c => ({
-    id:     c.id     as number,
-    name:   c.name   as string,
-    status: (c.status as string) ?? 'UNKNOWN',
-    tags:   extractCampaignTags(c),
+    id:         c.id         as number,
+    name:       c.name       as string,
+    status:     (c.status    as string) ?? 'UNKNOWN',
+    tags:       extractCampaignTags(c),
+    created_at: (c.created_at as string) ?? undefined,
   }));
 }
 
@@ -72,6 +73,22 @@ export async function removeSendersFromCampaign(campaignId: number, emailAccount
     body: JSON.stringify({ email_account_ids: emailAccountIds }),
   });
   if (!res.ok) throw new Error(`Failed to remove senders from campaign ${campaignId}: ${res.status}`);
+}
+
+export async function reallocateMailboxes(campaignId: number): Promise<unknown> {
+  const jwt = getJwt();
+  const url = `${INTERNAL_BASE}/email-campaigns/${campaignId}/reallocate-mailboxes`;
+  const res = await fetch(url, { headers: { Authorization: jwt }, cache: 'no-store' });
+  if (!res.ok) throw new Error(`Campaign ${campaignId}: ${res.status} ${res.statusText}`);
+  return res.json().catch(() => null);
+}
+
+export async function rescheduleFailedLeads(campaignId: number): Promise<unknown> {
+  const jwt = getJwt();
+  const url = `${INTERNAL_BASE}/email-campaigns/${campaignId}/reschedule-failed-leads`;
+  const res = await fetch(url, { headers: { Authorization: jwt }, cache: 'no-store' });
+  if (!res.ok) throw new Error(`Campaign ${campaignId}: ${res.status} ${res.statusText}`);
+  return res.json().catch(() => null);
 }
 
 export async function fetchAllEmailAccountsWithTags(): Promise<TagGroup[]> {

@@ -240,6 +240,7 @@ export default function CampaignSelector({
                     <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
                       <span className="mono">#{c.id}</span>
                       {c.sender_count !== undefined && <span> · {c.sender_count} senders</span>}
+                      {c.created_at && <span> · {formatDate(c.created_at)}</span>}
                     </span>
                     {(c.tags ?? []).map(tag => (
                       <span
@@ -269,6 +270,14 @@ export default function CampaignSelector({
       </div>
     </div>
   );
+}
+
+function formatDate(iso: string): string {
+  try {
+    return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  } catch {
+    return '';
+  }
 }
 
 function CheckIcon() {

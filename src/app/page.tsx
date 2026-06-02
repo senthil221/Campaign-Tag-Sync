@@ -5,8 +5,9 @@ import CampaignSelector from '@/components/CampaignSelector';
 import TagSelector from '@/components/TagSelector';
 import SyncPanel from '@/components/SyncPanel';
 import PreviewModal from '@/components/PreviewModal';
+import CampaignActionsPanel from '@/components/CampaignActionsPanel';
 import { getAccountHealth } from '@/types';
-import type { Campaign, TagGroup, CampaignSyncPreview, SyncResult } from '@/types';
+import type { Campaign, TagGroup, CampaignSyncPreview, SyncResult, ActionResult } from '@/types';
 
 export default function Home() {
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
@@ -140,6 +141,36 @@ export default function Home() {
     }
   }, [previews]);
 
+  const handleReallocate = useCallback(async (ids: number[], nameMap: Record<number, string>): Promise<ActionResult[]> => {
+    const res = await fetch('/api/reallocate-mailboxes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ campaign_ids: ids, campaign_names: nameMap }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error ?? 'Reallocate failed');
+    const ok = data.results.filter((r: ActionResult) => r.status === 'success').length;
+    const fail = data.results.filter((r: ActionResult) => r.status === 'error').length;
+    if (fail > 0) toast.error(`Reallocate: ${ok} done · ${fail} failed`);
+    else toast.success(`Reallocated mailboxes for ${ok} campaign${ok !== 1 ? 's' : ''}`);
+    return data.results;
+  }, []);
+
+  const handleReschedule = useCallback(async (ids: number[], nameMap: Record<number, string>): Promise<ActionResult[]> => {
+    const res = await fetch('/api/reschedule-failed-leads', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ campaign_ids: ids, campaign_names: nameMap }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error ?? 'Reschedule failed');
+    const ok = data.results.filter((r: ActionResult) => r.status === 'success').length;
+    const fail = data.results.filter((r: ActionResult) => r.status === 'error').length;
+    if (fail > 0) toast.error(`Reschedule: ${ok} done · ${fail} failed`);
+    else toast.success(`Rescheduled failed leads for ${ok} campaign${ok !== 1 ? 's' : ''}`);
+    return data.results;
+  }, []);
+
   const tagTotal = selectedTag?.health.total ?? 0;
   const activeUsed = useOnlyActive ? (selectedTag?.health.active ?? 0) : tagTotal;
   const disconnectedSkipped = useOnlyActive ? (selectedTag?.health.disconnected ?? 0) : 0;
@@ -199,17 +230,24 @@ export default function Home() {
           />
         </div>
 
-        {/* Sync panel — fixed at bottom */}
-        <div style={{ flexShrink: 0 }}>
-          <SyncPanel
+        {/* Bottom row: Sync Panel + Actions Panel */}
+        <div style={{ flexShrink: 0, display: 'flex', gap: 12, alignItems: 'stretch' }}>
+          <div style={{ flex: 1 }}>
+            <SyncPanel
+              selectedCampaigns={selectedCampaigns}
+              selectedTag={selectedTag}
+              syncMode={syncMode}
+              onModeChange={setSyncMode}
+              useOnlyActive={useOnlyActive}
+              onToggleActive={() => setUseOnlyActive(v => !v)}
+              onPreview={handlePreview}
+              previewLoading={previewLoading}
+            />
+          </div>
+          <CampaignActionsPanel
             selectedCampaigns={selectedCampaigns}
-            selectedTag={selectedTag}
-            syncMode={syncMode}
-            onModeChange={setSyncMode}
-            useOnlyActive={useOnlyActive}
-            onToggleActive={() => setUseOnlyActive(v => !v)}
-            onPreview={handlePreview}
-            previewLoading={previewLoading}
+            onReallocate={handleReallocate}
+            onReschedule={handleReschedule}
           />
         </div>
       </main>
