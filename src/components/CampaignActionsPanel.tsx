@@ -45,14 +45,12 @@ export default function CampaignActionsPanel({ selectedCampaigns, onReallocate, 
   const errorItems   = results?.items.filter(r => r.status === 'error')   ?? [];
 
   return (
-    <div className="panel" style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 12, minWidth: 260 }}>
+    <div className="panel" style={{ padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: 8, width: 200, flexShrink: 0 }}>
 
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <div className="section-label">Campaign Actions</div>
-        {count > 0 && (
-          <span className="pill pill-accent">{count} selected</span>
-        )}
+        <div className="section-label" style={{ fontSize: 10 }}>Campaign Actions</div>
+        {count > 0 && <span className="pill pill-accent">{count}</span>}
       </div>
 
       {/* Confirm state */}
@@ -60,35 +58,28 @@ export default function CampaignActionsPanel({ selectedCampaigns, onReallocate, 
         <div style={{
           background: 'var(--panel-3)',
           border: '1px solid var(--warning)',
-          borderRadius: 8,
-          padding: '10px 12px',
+          borderRadius: 7,
+          padding: '8px 10px',
           display: 'flex',
           flexDirection: 'column',
-          gap: 10,
+          gap: 8,
         }}>
-          <div style={{ fontSize: 12, color: 'var(--text-2)', lineHeight: 1.5 }}>
-            Run <span style={{ color: 'var(--warning)', fontWeight: 600 }}>{actionLabel(pending)}</span> on{' '}
+          <div style={{ fontSize: 11, color: 'var(--text-2)', lineHeight: 1.5 }}>
+            <span style={{ color: 'var(--warning)', fontWeight: 600 }}>{actionLabel(pending)}</span>
+            {' on '}
             <span style={{ color: 'var(--text)', fontWeight: 600 }}>{count} campaign{count !== 1 ? 's' : ''}</span>?
           </div>
-          <div style={{ display: 'flex', gap: 6 }}>
-            <button
-              className="btn btn-ghost"
-              style={{ flex: 1, justifyContent: 'center', fontSize: 12 }}
-              onClick={() => setPending(null)}
-              disabled={running}
-            >
+          <div style={{ display: 'flex', gap: 5 }}>
+            <button className="btn btn-ghost" style={{ flex: 1, justifyContent: 'center', fontSize: 11, padding: '4px 8px' }}
+              onClick={() => setPending(null)} disabled={running}>
               Cancel
             </button>
-            <button
-              className="btn btn-primary"
-              style={{ flex: 1, justifyContent: 'center', fontSize: 12, background: 'var(--warning)', borderColor: 'var(--warning)', color: '#000' }}
-              onClick={handleConfirm}
-              disabled={running}
-            >
+            <button className="btn btn-primary"
+              style={{ flex: 1, justifyContent: 'center', fontSize: 11, padding: '4px 8px', background: 'var(--warning)', borderColor: 'var(--warning)', color: '#000' }}
+              onClick={handleConfirm} disabled={running}>
               {running
-                ? <><span className="spinner" style={{ borderColor: 'rgba(0,0,0,0.2)', borderTopColor: '#000' }} />Running…</>
-                : 'Run'
-              }
+                ? <><span className="spinner" style={{ borderColor: 'rgba(0,0,0,0.2)', borderTopColor: '#000', width: 10, height: 10 }} />…</>
+                : 'Run'}
             </button>
           </div>
         </div>
@@ -96,25 +87,24 @@ export default function CampaignActionsPanel({ selectedCampaigns, onReallocate, 
 
       {/* Action buttons */}
       {!pending && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
           {ACTIONS.map(a => (
             <button
               key={a.key}
+              title={a.desc}
               disabled={count === 0}
               onClick={() => { setResults(null); setPending(a.key); }}
+              className="btn btn-ghost"
               style={{
-                padding: '10px 12px',
-                border: `1px solid var(--border)`,
-                borderRadius: 8,
-                background: 'var(--panel-2)',
-                cursor: count === 0 ? 'not-allowed' : 'pointer',
-                textAlign: 'left',
+                justifyContent: 'flex-start',
+                fontSize: 12,
+                padding: '7px 10px',
                 opacity: count === 0 ? 0.4 : 1,
-                transition: 'all 0.15s',
+                cursor: count === 0 ? 'not-allowed' : 'pointer',
+                width: '100%',
               }}
             >
-              <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)', marginBottom: 2 }}>{a.label}</div>
-              <div style={{ fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.4 }}>{a.desc}</div>
+              {a.label}
             </button>
           ))}
         </div>
@@ -122,50 +112,28 @@ export default function CampaignActionsPanel({ selectedCampaigns, onReallocate, 
 
       {/* Results */}
       {results && !pending && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            fontSize: 12,
-          }}>
-            <span style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>
-              {actionLabel(results.action)}
-            </span>
-            <button
-              className="btn btn-ghost"
-              style={{ padding: '2px 6px', fontSize: 11 }}
-              onClick={() => setResults(null)}
-            >
-              Clear
-            </button>
-          </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
           <div style={{
             background: errorItems.length > 0 ? 'rgba(255,80,80,0.06)' : 'rgba(0,255,128,0.06)',
             border: `1px solid ${errorItems.length > 0 ? 'var(--danger)' : 'var(--success)'}`,
-            borderRadius: 8,
-            padding: '8px 12px',
-            fontSize: 12,
+            borderRadius: 7,
+            padding: '6px 10px',
+            fontSize: 11,
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
           }}>
-            <span style={{ color: 'var(--success)', fontWeight: 600 }}>{successCount} done</span>
-            {errorItems.length > 0 && (
-              <span style={{ color: 'var(--danger)', fontWeight: 600 }}> · {errorItems.length} failed</span>
-            )}
+            <span>
+              <span style={{ color: 'var(--success)', fontWeight: 600 }}>{successCount} done</span>
+              {errorItems.length > 0 && <span style={{ color: 'var(--danger)', fontWeight: 600 }}> · {errorItems.length} failed</span>}
+            </span>
+            <button className="btn btn-ghost" style={{ padding: '1px 5px', fontSize: 10 }} onClick={() => setResults(null)}>×</button>
           </div>
           {errorItems.length > 0 && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 4, maxHeight: 120, overflowY: 'auto' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 3, maxHeight: 100, overflowY: 'auto' }}>
               {errorItems.map(r => (
-                <div key={r.campaign_id} style={{
-                  fontSize: 11,
-                  color: 'var(--danger)',
-                  background: 'var(--panel-3)',
-                  border: '1px solid var(--border)',
-                  borderRadius: 6,
-                  padding: '5px 8px',
-                  lineHeight: 1.4,
-                }}>
-                  <span style={{ color: 'var(--text-muted)' }}>{r.campaign_name}: </span>
-                  {r.error}
+                <div key={r.campaign_id} style={{ fontSize: 10, color: 'var(--danger)', background: 'var(--panel-3)', border: '1px solid var(--border)', borderRadius: 5, padding: '4px 7px', lineHeight: 1.4 }}>
+                  <span style={{ color: 'var(--text-muted)' }}>{r.campaign_name}: </span>{r.error}
                 </div>
               ))}
             </div>
@@ -174,8 +142,8 @@ export default function CampaignActionsPanel({ selectedCampaigns, onReallocate, 
       )}
 
       {count === 0 && !results && !pending && (
-        <div style={{ fontSize: 11, color: 'var(--text-faint)', textAlign: 'center', padding: '8px 0' }}>
-          Select campaigns to enable actions
+        <div style={{ fontSize: 10, color: 'var(--text-faint)', textAlign: 'center', padding: '4px 0' }}>
+          Select campaigns to enable
         </div>
       )}
     </div>

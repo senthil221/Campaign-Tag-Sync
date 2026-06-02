@@ -232,7 +232,7 @@ export default function Home() {
 
         {/* Bottom row: Sync Panel + Actions Panel */}
         <div style={{ flexShrink: 0, display: 'flex', gap: 12, alignItems: 'stretch' }}>
-          <div style={{ flex: 1 }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
             <SyncPanel
               selectedCampaigns={selectedCampaigns}
               selectedTag={selectedTag}
