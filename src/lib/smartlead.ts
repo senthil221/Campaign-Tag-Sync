@@ -103,15 +103,31 @@ type RawAccount = {
 
 async function fetchAccountPage(jwt: string, offset: number, limit: number): Promise<{ accounts: RawAccount[]; total: number | null }> {
   const url = `${INTERNAL_BASE}/email-account/get-total-email-accounts?offset=${offset}&limit=${limit}`;
-  const res = await fetch(url, { headers: { Authorization: jwt }, cache: 'no-store' });
-  if (!res.ok) {
-    const body = await res.text().catch(() => '');
-    throw new Error(`Failed to fetch email accounts at offset ${offset}: ${res.status} ${res.statusText} — ${body}`);
+  const MAX_RETRIES = 4;
+  let delay = 3000; // start at 3s on 429, double each retry
+
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    const res = await fetch(url, { headers: { Authorization: jwt }, cache: 'no-store' });
+
+    if (res.status === 429) {
+      if (attempt === MAX_RETRIES) throw new Error(`Rate limited at offset ${offset} after ${MAX_RETRIES} retries`);
+      await new Promise(r => setTimeout(r, delay));
+      delay *= 2;
+      continue;
+    }
+
+    if (!res.ok) {
+      const body = await res.text().catch(() => '');
+      throw new Error(`Failed to fetch email accounts at offset ${offset}: ${res.status} ${res.statusText} — ${body}`);
+    }
+
+    const json = await res.json();
+    const accounts: RawAccount[] = json?.data?.email_accounts ?? json?.data ?? [];
+    const total: number | null = json?.data?.total_email_accounts ?? json?.total_email_accounts ?? null;
+    return { accounts: Array.isArray(accounts) ? accounts : [], total };
   }
-  const json = await res.json();
-  const accounts: RawAccount[] = json?.data?.email_accounts ?? json?.data ?? [];
-  const total: number | null = json?.data?.total_email_accounts ?? json?.total_email_accounts ?? null;
-  return { accounts: Array.isArray(accounts) ? accounts : [], total };
+
+  throw new Error(`Unreachable: fetchAccountPage offset ${offset}`);
 }
 
 function groupAccountsByTag(allAccounts: RawAccount[]): TagGroup[] {
@@ -151,7 +167,8 @@ function groupAccountsByTag(allAccounts: RawAccount[]): TagGroup[] {
 export async function fetchAllEmailAccountsWithTags(): Promise<TagGroup[]> {
   const jwt = getJwt();
   const LIMIT = 100;
-  const CONCURRENT = 10;
+  const CONCURRENT = 3;   // stay under Smartlead rate limits
+  const BATCH_DELAY = 300; // ms between batches
 
   // Fetch first page to get data and (hopefully) total count
   const { accounts: firstAccounts, total } = await fetchAccountPage(jwt, 0, LIMIT);
@@ -173,7 +190,7 @@ export async function fetchAllEmailAccountsWithTags(): Promise<TagGroup[]> {
       }
     }
 
-    // Fetch remaining pages in parallel batches
+    // Fetch remaining pages in parallel batches, respecting rate limits
     for (let i = 0; i < remainingOffsets.length; i += CONCURRENT) {
       const batch = remainingOffsets.slice(i, i + CONCURRENT);
       const results = await Promise.all(
@@ -186,6 +203,10 @@ export async function fetchAllEmailAccountsWithTags(): Promise<TagGroup[]> {
         allAccounts.push(...accounts);
       }
       if (done) break;
+
+      if (i + CONCURRENT < remainingOffsets.length) {
+        await new Promise(r => setTimeout(r, BATCH_DELAY));
+      }
     }
   }
 
