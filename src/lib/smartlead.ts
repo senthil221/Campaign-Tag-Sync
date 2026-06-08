@@ -93,45 +93,31 @@ export async function rescheduleFailedLeads(campaignId: number): Promise<unknown
   return res.json().catch(() => null);
 }
 
-export async function fetchAllEmailAccountsWithTags(): Promise<TagGroup[]> {
-  const jwt = getJwt();
-  const limit = 100;
-  let offset = 0;
-  let allAccounts: Array<{
-    id: number;
-    from_email: string;
-    is_smtp_success?: boolean | null;
-    is_imap_success?: boolean | null;
-    email_account_tag_mappings: Array<{ tag?: { name?: string } }>;
-  }> = [];
-  let more = true;
+type RawAccount = {
+  id: number;
+  from_email: string;
+  is_smtp_success?: boolean | null;
+  is_imap_success?: boolean | null;
+  email_account_tag_mappings: Array<{ tag?: { name?: string } }>;
+};
 
-  while (more) {
-    const url = `${INTERNAL_BASE}/email-account/get-total-email-accounts?offset=${offset}&limit=${limit}`;
-    const res = await fetch(url, {
-      headers: { Authorization: jwt },
-      cache: 'no-store',
-    });
-    if (!res.ok) {
-      const body = await res.text().catch(() => '');
-      throw new Error(`Failed to fetch email accounts: ${res.status} ${res.statusText} — ${body}`);
-    }
-    const json = await res.json();
-    const accounts = json?.data?.email_accounts ?? json?.data ?? [];
-    if (!accounts || accounts.length === 0) {
-      more = false;
-    } else {
-      allAccounts = allAccounts.concat(Array.isArray(accounts) ? accounts : [accounts]);
-      offset += limit;
-      await new Promise(r => setTimeout(r, 150));
-    }
+async function fetchAccountPage(jwt: string, offset: number, limit: number): Promise<{ accounts: RawAccount[]; total: number | null }> {
+  const url = `${INTERNAL_BASE}/email-account/get-total-email-accounts?offset=${offset}&limit=${limit}`;
+  const res = await fetch(url, { headers: { Authorization: jwt }, cache: 'no-store' });
+  if (!res.ok) {
+    const body = await res.text().catch(() => '');
+    throw new Error(`Failed to fetch email accounts at offset ${offset}: ${res.status} ${res.statusText} — ${body}`);
   }
+  const json = await res.json();
+  const accounts: RawAccount[] = json?.data?.email_accounts ?? json?.data ?? [];
+  const total: number | null = json?.data?.total_email_accounts ?? json?.total_email_accounts ?? null;
+  return { accounts: Array.isArray(accounts) ? accounts : [], total };
+}
 
-  // Group by tag name
+function groupAccountsByTag(allAccounts: RawAccount[]): TagGroup[] {
   const tagMap: Record<string, EmailAccount[]> = {};
   for (const acc of allAccounts) {
-    const mappings = acc.email_account_tag_mappings ?? [];
-    for (const m of mappings) {
+    for (const m of acc.email_account_tag_mappings ?? []) {
       const tName = m.tag?.name;
       if (tName) {
         if (!tagMap[tName]) tagMap[tName] = [];
@@ -160,4 +146,48 @@ export async function fetchAllEmailAccountsWithTags(): Promise<TagGroup[]> {
       );
       return { name, accounts, count: accounts.length, health };
     });
+}
+
+export async function fetchAllEmailAccountsWithTags(): Promise<TagGroup[]> {
+  const jwt = getJwt();
+  const LIMIT = 100;
+  const CONCURRENT = 10;
+
+  // Fetch first page to get data and (hopefully) total count
+  const { accounts: firstAccounts, total } = await fetchAccountPage(jwt, 0, LIMIT);
+  const allAccounts: RawAccount[] = [...firstAccounts];
+
+  if (firstAccounts.length === LIMIT) {
+    let remainingOffsets: number[];
+
+    if (total !== null && total > LIMIT) {
+      remainingOffsets = [];
+      for (let offset = LIMIT; offset < total; offset += LIMIT) {
+        remainingOffsets.push(offset);
+      }
+    } else {
+      // Total unknown — speculatively fetch up to 50k accounts
+      remainingOffsets = [];
+      for (let offset = LIMIT; offset <= 50000; offset += LIMIT) {
+        remainingOffsets.push(offset);
+      }
+    }
+
+    // Fetch remaining pages in parallel batches
+    for (let i = 0; i < remainingOffsets.length; i += CONCURRENT) {
+      const batch = remainingOffsets.slice(i, i + CONCURRENT);
+      const results = await Promise.all(
+        batch.map(offset => fetchAccountPage(jwt, offset, LIMIT))
+      );
+
+      let done = false;
+      for (const { accounts } of results) {
+        if (accounts.length === 0) { done = true; break; }
+        allAccounts.push(...accounts);
+      }
+      if (done) break;
+    }
+  }
+
+  return groupAccountsByTag(allAccounts);
 }

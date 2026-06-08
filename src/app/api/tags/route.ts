@@ -1,9 +1,11 @@
 import { NextResponse } from 'next/server';
-import { fetchAllEmailAccountsWithTags } from '@/lib/smartlead';
+import { getTagsWithCache } from '@/lib/tag-cache';
+
+export const maxDuration = 60;
 
 export async function GET() {
   try {
-    const tags = await fetchAllEmailAccountsWithTags();
+    const tags = await getTagsWithCache();
     return NextResponse.json({ tags });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';

@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { fetchAllEmailAccountsWithTags } from '@/lib/smartlead';
+import { getTagsWithCache } from '@/lib/tag-cache';
+
+export const maxDuration = 60;
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ tagName: string }> }) {
   try {
     const { tagName } = await params;
     const decoded = decodeURIComponent(tagName);
-    const tags = await fetchAllEmailAccountsWithTags();
+    const tags = await getTagsWithCache();
     const tag = tags.find(t => t.name === decoded);
     if (!tag) {
       return NextResponse.json({ error: `Tag "${decoded}" not found` }, { status: 404 });
