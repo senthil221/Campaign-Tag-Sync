@@ -7,6 +7,7 @@ import SyncPanel from '@/components/SyncPanel';
 import PreviewModal from '@/components/PreviewModal';
 import CampaignActionsPanel from '@/components/CampaignActionsPanel';
 import { getAccountHealth } from '@/types';
+import { fetchJson } from '@/lib/fetch-json';
 import type { Campaign, TagGroup, CampaignSyncPreview, SyncResult, ActionResult } from '@/types';
 
 export default function Home() {
@@ -28,9 +29,7 @@ export default function Home() {
   const fetchCampaigns = useCallback(async () => {
     setCampaignsLoading(true);
     try {
-      const res = await fetch('/api/campaigns');
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? 'Failed to fetch campaigns');
+      const data = await fetchJson<{ campaigns: Campaign[] }>('/api/campaigns');
       setCampaigns(data.campaigns);
       toast.success(`Loaded ${data.campaigns.length} campaigns`);
     } catch (err) {
@@ -43,9 +42,7 @@ export default function Home() {
   const fetchTags = useCallback(async () => {
     setTagsLoading(true);
     try {
-      const res = await fetch('/api/tags');
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? 'Failed to fetch tags');
+      const data = await fetchJson<{ tags: TagGroup[] }>('/api/tags');
       setTags(data.tags);
       toast.success(`Loaded ${data.tags.length} email tags`);
     } catch (err) {
@@ -97,7 +94,7 @@ export default function Home() {
       const campaignNameMap: Record<number, string> = {};
       campaigns.forEach(c => { campaignNameMap[c.id] = c.name; });
 
-      const res = await fetch('/api/preview-sync', {
+      const data = await fetchJson<{ previews: CampaignSyncPreview[] }>('/api/preview-sync', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -107,8 +104,6 @@ export default function Home() {
           mode: syncMode,
         }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? 'Preview failed');
       setPreviews(data.previews);
       setSyncResults(null);
     } catch (err) {
@@ -122,13 +117,11 @@ export default function Home() {
     if (!previews) return;
     setExecuting(true);
     try {
-      const res = await fetch('/api/execute-sync', {
+      const data = await fetchJson<{ results: SyncResult[] }>('/api/execute-sync', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ previews }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? 'Sync failed');
       setSyncResults(data.results);
       const success = data.results.filter((r: SyncResult) => r.status === 'success').length;
       const failed = data.results.filter((r: SyncResult) => r.status === 'error').length;
@@ -142,13 +135,11 @@ export default function Home() {
   }, [previews]);
 
   const handleReallocate = useCallback(async (ids: number[], nameMap: Record<number, string>): Promise<ActionResult[]> => {
-    const res = await fetch('/api/reallocate-mailboxes', {
+    const data = await fetchJson<{ results: ActionResult[] }>('/api/reallocate-mailboxes', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ campaign_ids: ids, campaign_names: nameMap }),
     });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error ?? 'Reallocate failed');
     const ok = data.results.filter((r: ActionResult) => r.status === 'success').length;
     const fail = data.results.filter((r: ActionResult) => r.status === 'error').length;
     if (fail > 0) toast.error(`Reallocate: ${ok} done · ${fail} failed`);
@@ -157,13 +148,11 @@ export default function Home() {
   }, []);
 
   const handleReschedule = useCallback(async (ids: number[], nameMap: Record<number, string>): Promise<ActionResult[]> => {
-    const res = await fetch('/api/reschedule-failed-leads', {
+    const data = await fetchJson<{ results: ActionResult[] }>('/api/reschedule-failed-leads', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ campaign_ids: ids, campaign_names: nameMap }),
     });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error ?? 'Reschedule failed');
     const ok = data.results.filter((r: ActionResult) => r.status === 'success').length;
     const fail = data.results.filter((r: ActionResult) => r.status === 'error').length;
     if (fail > 0) toast.error(`Reschedule: ${ok} done · ${fail} failed`);
