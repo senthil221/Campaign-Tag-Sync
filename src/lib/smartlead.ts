@@ -103,16 +103,18 @@ type RawAccount = {
 
 async function fetchAccountPage(jwt: string, offset: number, limit: number): Promise<{ accounts: RawAccount[]; total: number | null }> {
   const url = `${INTERNAL_BASE}/email-account/get-total-email-accounts?offset=${offset}&limit=${limit}`;
-  const MAX_RETRIES = 4;
-  let delay = 3000; // start at 3s on 429, double each retry
+  const MAX_RETRIES = 3;
 
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     const res = await fetch(url, { headers: { Authorization: jwt }, cache: 'no-store' });
 
     if (res.status === 429) {
       if (attempt === MAX_RETRIES) throw new Error(`Rate limited at offset ${offset} after ${MAX_RETRIES} retries`);
-      await new Promise(r => setTimeout(r, delay));
-      delay *= 2;
+      // Smartlead's 429 says "try again in 60 seconds" — honor the Retry-After
+      // header if present, otherwise wait the full window so the limit resets.
+      const retryAfter = Number(res.headers.get('retry-after'));
+      const wait = Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter * 1000 : 60000;
+      await new Promise(r => setTimeout(r, wait));
       continue;
     }
 
@@ -167,8 +169,8 @@ function groupAccountsByTag(allAccounts: RawAccount[]): TagGroup[] {
 export async function fetchAllEmailAccountsWithTags(): Promise<TagGroup[]> {
   const jwt = getJwt();
   const LIMIT = 100;
-  const CONCURRENT = 3;   // stay under Smartlead rate limits
-  const BATCH_DELAY = 300; // ms between batches
+  const CONCURRENT = 2;   // stay well under Smartlead rate limits
+  const BATCH_DELAY = 400; // ms gap between batches
 
   // Fetch first page to get data and (hopefully) total count
   const { accounts: firstAccounts, total } = await fetchAccountPage(jwt, 0, LIMIT);

@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { refreshTags } from '@/lib/tag-store';
 
-export const maxDuration = 60;
+// Background refresh can run long (full 20k-account fetch with gentle pacing).
+// Vercel Pro allows up to 300s; Hobby caps at 60s.
+export const maxDuration = 300;
 
 /**
  * Background refresh, invoked by Vercel Cron (see vercel.json). Vercel sends
