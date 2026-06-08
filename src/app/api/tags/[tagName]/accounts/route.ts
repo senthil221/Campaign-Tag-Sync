@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getTags } from '@/lib/tag-store';
 
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ tagName: string }> }) {
   try {

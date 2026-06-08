@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getStoreStatus, invalidateTags, refreshTags } from '@/lib/tag-store';
 
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 // GET /api/cache — inspect cache status (age, counts)
 export async function GET() {

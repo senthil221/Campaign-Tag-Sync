@@ -1,7 +1,9 @@
 import { NextResponse } from 'next/server';
 import { getTags } from '@/lib/tag-store';
 
-export const maxDuration = 60;
+// 20k accounts = 200 pages (Smartlead caps at 100/page). The full fetch can
+// take well over 60s, so allow the max (Vercel Pro supports up to 300s).
+export const maxDuration = 300;
 
 export async function GET() {
   try {
