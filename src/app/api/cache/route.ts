@@ -3,20 +3,15 @@ import { getStoreStatus, invalidateTags, refreshTags } from '@/lib/tag-store';
 
 export const maxDuration = 60;
 
-// GET /api/cache — inspect store status (backend, age, counts)
+// GET /api/cache — inspect cache status (age, counts)
 export async function GET() {
-  try {
-    return NextResponse.json(await getStoreStatus());
-  } catch (err) {
-    const message = err instanceof Error ? err.message : 'Unknown error';
-    return NextResponse.json({ error: message }, { status: 500 });
-  }
+  return NextResponse.json(getStoreStatus());
 }
 
-// POST /api/cache — force a synchronous refresh (manual "refresh now" button)
+// POST /api/cache — force a synchronous refresh (manual "refresh now")
 export async function POST() {
   try {
-    await invalidateTags();
+    invalidateTags();
     const meta = await refreshTags();
     return NextResponse.json({ message: 'Refreshed', ...meta });
   } catch (err) {
