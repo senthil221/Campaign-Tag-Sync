@@ -1,16 +1,26 @@
 import { NextResponse } from 'next/server';
-import { getCacheStatus, invalidateTagCache, getTagsWithCache } from '@/lib/tag-cache';
+import { getStoreStatus, invalidateTags, refreshTags } from '@/lib/tag-store';
 
 export const maxDuration = 60;
 
+// GET /api/cache — inspect store status (backend, age, counts)
 export async function GET() {
-  return NextResponse.json(getCacheStatus());
+  try {
+    return NextResponse.json(await getStoreStatus());
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Unknown error';
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
 }
 
-// POST /api/cache — invalidate and optionally warm the cache
+// POST /api/cache — force a synchronous refresh (manual "refresh now" button)
 export async function POST() {
-  invalidateTagCache();
-  // Kick off background warm-up so the next user request hits cache
-  getTagsWithCache().catch(() => null);
-  return NextResponse.json({ message: 'Cache invalidated, warming in background' });
+  try {
+    await invalidateTags();
+    const meta = await refreshTags();
+    return NextResponse.json({ message: 'Refreshed', ...meta });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Unknown error';
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
 }
