@@ -1,5 +1,4 @@
-import { getAccountHealth } from '@/types';
-import type { Campaign, EmailAccount, TagGroup } from '@/types';
+import type { AccountChunk, Campaign, EmailAccount, FlatAccount } from '@/types';
 
 const API_BASE = 'https://server.smartlead.ai/api/v1';
 const INTERNAL_BASE = 'https://server.smartlead.ai/api';
@@ -98,119 +97,66 @@ type RawAccount = {
   from_email: string;
   is_smtp_success?: boolean | null;
   is_imap_success?: boolean | null;
-  email_account_tag_mappings: Array<{ tag?: { name?: string } }>;
+  email_account_tag_mappings?: Array<{ tag?: { name?: string } }>;
 };
 
-async function fetchAccountPage(jwt: string, offset: number, limit: number): Promise<{ accounts: RawAccount[]; total: number | null }> {
-  const url = `${INTERNAL_BASE}/email-account/get-total-email-accounts?offset=${offset}&limit=${limit}`;
-  const MAX_RETRIES = 3;
-
-  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-    const res = await fetch(url, { headers: { Authorization: jwt }, cache: 'no-store' });
-
-    if (res.status === 429) {
-      if (attempt === MAX_RETRIES) throw new Error(`Rate limited at offset ${offset} after ${MAX_RETRIES} retries`);
-      // Smartlead's 429 says "try again in 60 seconds" — honor the Retry-After
-      // header if present, otherwise wait the full window so the limit resets.
-      const retryAfter = Number(res.headers.get('retry-after'));
-      const wait = Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter * 1000 : 60000;
-      await new Promise(r => setTimeout(r, wait));
-      continue;
-    }
-
-    if (!res.ok) {
-      const body = await res.text().catch(() => '');
-      throw new Error(`Failed to fetch email accounts at offset ${offset}: ${res.status} ${res.statusText} — ${body}`);
-    }
-
-    const json = await res.json();
-    const accounts: RawAccount[] = json?.data?.email_accounts ?? json?.data ?? [];
-    const total: number | null = json?.data?.total_email_accounts ?? json?.total_email_accounts ?? null;
-    return { accounts: Array.isArray(accounts) ? accounts : [], total };
-  }
-
-  throw new Error(`Unreachable: fetchAccountPage offset ${offset}`);
+function flattenAccount(a: RawAccount): FlatAccount {
+  const tags = (a.email_account_tag_mappings ?? [])
+    .map(m => m.tag?.name)
+    .filter((n): n is string => !!n);
+  return {
+    id: a.id,
+    from_email: a.from_email ?? 'unknown',
+    is_smtp_success: a.is_smtp_success ?? null,
+    is_imap_success: a.is_imap_success ?? null,
+    tags,
+  };
 }
 
-function groupAccountsByTag(allAccounts: RawAccount[]): TagGroup[] {
-  const tagMap: Record<string, EmailAccount[]> = {};
-  for (const acc of allAccounts) {
-    for (const m of acc.email_account_tag_mappings ?? []) {
-      const tName = m.tag?.name;
-      if (tName) {
-        if (!tagMap[tName]) tagMap[tName] = [];
-        tagMap[tName].push({
-          id: acc.id,
-          from_email: acc.from_email ?? 'unknown',
-          is_smtp_success: acc.is_smtp_success ?? null,
-          is_imap_success: acc.is_imap_success ?? null,
-        });
-      }
-    }
-  }
-
-  return Object.keys(tagMap)
-    .sort()
-    .map(name => {
-      const accounts = tagMap[name];
-      const health = accounts.reduce(
-        (acc, a) => {
-          const h = getAccountHealth(a);
-          acc[h]++;
-          acc.total++;
-          return acc;
-        },
-        { total: 0, active: 0, disconnected: 0, unknown: 0 }
-      );
-      return { name, accounts, count: accounts.length, health };
-    });
-}
-
-export async function fetchAllEmailAccountsWithTags(): Promise<TagGroup[]> {
+/**
+ * Fetch a single page of email accounts. Designed for the chunked, client-
+ * paced loader: it does NOT block-and-retry on a 429. Instead it reports
+ * `rateLimited` (with the server's Retry-After) and lets the caller back off,
+ * so each request stays short and well under any serverless timeout.
+ */
+export async function fetchAccountChunk(offset: number, limit: number): Promise<AccountChunk> {
   const jwt = getJwt();
-  const LIMIT = 100;
-  const CONCURRENT = 2;   // stay well under Smartlead rate limits
-  const BATCH_DELAY = 400; // ms gap between batches
+  const url = `${INTERNAL_BASE}/email-account/get-total-email-accounts?offset=${offset}&limit=${limit}`;
+  const res = await fetch(url, { headers: { Authorization: jwt }, cache: 'no-store' });
 
-  // Fetch first page to get data and (hopefully) total count
-  const { accounts: firstAccounts, total } = await fetchAccountPage(jwt, 0, LIMIT);
-  const allAccounts: RawAccount[] = [...firstAccounts];
-
-  if (firstAccounts.length === LIMIT) {
-    let remainingOffsets: number[];
-
-    if (total !== null && total > LIMIT) {
-      remainingOffsets = [];
-      for (let offset = LIMIT; offset < total; offset += LIMIT) {
-        remainingOffsets.push(offset);
-      }
-    } else {
-      // Total unknown — speculatively fetch up to 50k accounts
-      remainingOffsets = [];
-      for (let offset = LIMIT; offset <= 50000; offset += LIMIT) {
-        remainingOffsets.push(offset);
-      }
-    }
-
-    // Fetch remaining pages in parallel batches, respecting rate limits
-    for (let i = 0; i < remainingOffsets.length; i += CONCURRENT) {
-      const batch = remainingOffsets.slice(i, i + CONCURRENT);
-      const results = await Promise.all(
-        batch.map(offset => fetchAccountPage(jwt, offset, LIMIT))
-      );
-
-      let done = false;
-      for (const { accounts } of results) {
-        if (accounts.length === 0) { done = true; break; }
-        allAccounts.push(...accounts);
-      }
-      if (done) break;
-
-      if (i + CONCURRENT < remainingOffsets.length) {
-        await new Promise(r => setTimeout(r, BATCH_DELAY));
-      }
-    }
+  if (res.status === 429) {
+    const retryAfter = Number(res.headers.get('retry-after'));
+    return {
+      accounts: [],
+      nextOffset: offset, // retry the same offset after backing off
+      total: null,
+      rateLimited: true,
+      retryAfter: Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter : 60,
+    };
   }
 
-  return groupAccountsByTag(allAccounts);
+  if (!res.ok) {
+    const body = await res.text().catch(() => '');
+    throw new Error(`Failed to fetch email accounts at offset ${offset}: ${res.status} ${res.statusText} — ${body}`);
+  }
+
+  const json = await res.json();
+  const raw: RawAccount[] = json?.data?.email_accounts ?? json?.data ?? [];
+  const list = Array.isArray(raw) ? raw : [];
+  const total: number | null = json?.data?.total_email_accounts ?? json?.total_email_accounts ?? null;
+  const accounts = list.map(flattenAccount);
+
+  // Decide whether more pages remain. A short page always means we're done;
+  // otherwise advance by what the server actually returned, bounded by total.
+  let nextOffset: number | null;
+  if (list.length < limit) {
+    nextOffset = null;
+  } else if (total !== null) {
+    const fetchedEnd = offset + list.length;
+    nextOffset = fetchedEnd < total ? fetchedEnd : null;
+  } else {
+    nextOffset = offset + list.length;
+  }
+
+  return { accounts, nextOffset, total, rateLimited: false };
 }

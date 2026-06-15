@@ -1,5 +1,5 @@
 'use client';
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { toast } from 'sonner';
 import CampaignSelector from '@/components/CampaignSelector';
 import TagSelector from '@/components/TagSelector';
@@ -8,6 +8,7 @@ import PreviewModal from '@/components/PreviewModal';
 import CampaignActionsPanel from '@/components/CampaignActionsPanel';
 import { getAccountHealth } from '@/types';
 import { fetchJson } from '@/lib/fetch-json';
+import { loadAllTags, readCachedTags, type LoadProgress } from '@/lib/load-tags';
 import type { Campaign, TagGroup, CampaignSyncPreview, SyncResult, ActionResult } from '@/types';
 
 export default function Home() {
@@ -20,7 +21,9 @@ export default function Home() {
 
   const [campaignsLoading, setCampaignsLoading] = useState(false);
   const [tagsLoading, setTagsLoading] = useState(false);
+  const [tagsProgress, setTagsProgress] = useState<LoadProgress | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
+  const tagsAbort = useRef<AbortController | null>(null);
 
   const [previews, setPreviews] = useState<CampaignSyncPreview[] | null>(null);
   const [executing, setExecuting] = useState(false);
@@ -39,16 +42,40 @@ export default function Home() {
     }
   }, []);
 
+  // Hydrate tags from the last cached load, if any. This must run after mount
+  // (not as lazy initial state) because the page is statically prerendered with
+  // no localStorage — reading it during render would cause a hydration mismatch.
+  useEffect(() => {
+    const cached = readCachedTags();
+    if (!cached) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional one-time hydration from localStorage on mount
+    setTags(cached.tags);
+    if (cached.stale) {
+      toast('Showing cached tags — click refresh to update', { duration: 4000 });
+    }
+  }, []);
+
   const fetchTags = useCallback(async () => {
+    tagsAbort.current?.abort();
+    const controller = new AbortController();
+    tagsAbort.current = controller;
+
     setTagsLoading(true);
+    setTagsProgress({ loaded: 0, total: null });
     try {
-      const data = await fetchJson<{ tags: TagGroup[] }>('/api/tags');
-      setTags(data.tags);
-      toast.success(`Loaded ${data.tags.length} email tags`);
+      const tags = await loadAllTags({
+        signal: controller.signal,
+        onProgress: setTagsProgress,
+      });
+      setTags(tags);
+      toast.success(`Loaded ${tags.length} email tags`);
     } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') return;
       toast.error(err instanceof Error ? err.message : 'Failed to fetch tags');
     } finally {
+      if (tagsAbort.current === controller) tagsAbort.current = null;
       setTagsLoading(false);
+      setTagsProgress(null);
     }
   }, []);
 
@@ -215,6 +242,7 @@ export default function Home() {
             selectedTag={selectedTagName}
             onSelect={setSelectedTagName}
             loading={tagsLoading}
+            progress={tagsProgress}
             onRefresh={fetchTags}
           />
         </div>

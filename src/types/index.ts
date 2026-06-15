@@ -21,6 +21,24 @@ export interface EmailAccount {
   is_imap_success?: boolean | null;
 }
 
+/** Flattened account returned by the chunked /api/tags/chunk endpoint. */
+export interface FlatAccount {
+  id: number;
+  from_email: string;
+  is_smtp_success: boolean | null;
+  is_imap_success: boolean | null;
+  tags: string[];
+}
+
+export interface AccountChunk {
+  accounts: FlatAccount[];
+  nextOffset: number | null; // null = no more data
+  total: number | null;
+  rateLimited: boolean;
+  /** Seconds to wait before retrying when rateLimited is true. */
+  retryAfter?: number;
+}
+
 export type AccountHealth = 'active' | 'disconnected' | 'unknown';
 
 export function getAccountHealth(acc: EmailAccount): AccountHealth {
